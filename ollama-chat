@@ -1,0 +1,108 @@
+#!/bin/bash
+
+banner () {
+echo " ▒█████   ██▓     ██▓    ▄▄▄       ███▄ ▄███▓ ▄▄▄      "
+echo "▒██▒  ██▒▓██▒    ▓██▒   ▒████▄    ▓██▒▀█▀ ██▒▒████▄    "
+echo "▒██░  ██▒▒██░    ▒██░   ▒██  ▀█▄  ▓██    ▓██░▒██  ▀█▄  "
+echo "▒██   ██░▒██░    ▒██░   ░██▄▄▄▄██ ▒██    ▒██ ░██▄▄▄▄██ "
+echo "░ ████▓▒░░██████▒░██████▒▓█   ▓██▒▒██▒   ░██▒ ▓█   ▓██▒"
+echo "░ ▒░▒░▒░ ░ ▒░▓  ░░ ▒░▓  ░▒▒   ▓▒█░░ ▒░   ░  ░ ▒▒   ▓▒█░"
+echo "  ░ ▒ ▒░ ░ ░ ▒  ░░ ░ ▒  ░ ▒   ▒▒ ░░  ░      ░  ▒   ▒▒ ░"
+echo "░ ░ ░ ▒    ░ ░     ░ ░    ░   ▒   ░      ░     ░   ▒   "
+echo "    ░ ░      ░  ░    ░  ░     ░  ░       ░         ░  ░"
+echo "                                                       "
+}
+clear 
+banner
+#pacman -S python-pipx sox jq --noconfirm
+#pipx install vosk edge-tts
+
+export PATH="$PATH:$HOME/.local/bin"
+link="http://localhost:11434"
+history_file="conversation_history.json"
+model="llama3.1"
+NOW=`date '+%F_%H:%M:%S'`
+
+ollama list | grep Error
+
+echo "1. typing to respond"
+echo "2. speaking to respond (BETA)"
+read -r -p "Option: " choice
+clear
+banner
+
+echo "1. Let your ai talk with voice"
+echo "2. Let your ai talk with text"
+read -r -p "Option: " choice2
+clear
+banner
+
+initialize_history() {
+  if [[ ! -f "$history_file" ]]; then
+    echo '{"model": "'"$model"'", "messages": []}' > "$history_file"
+  else
+    jq --arg model "$model" '.model = $model' "$history_file" > tmp.json && mv tmp.json "$history_file"
+  fi
+}
+
+update_model_in_history() {
+  local new_model="$1"
+  model="$new_model"
+  jq --arg model "$new_model" '.model = $model' "$history_file" > tmp.json && mv tmp.json "$history_file"
+  echo "Model updated to: $new_model"
+}
+
+add_message_to_history() {
+  local role="$1"
+  local content="$2"
+  jq --arg role "$role" --arg content "$content" \
+    '.messages += [{"role": $role, "content": $content}]' \
+    "$history_file" > tmp.json && mv tmp.json "$history_file"
+}
+
+chat_with_ollama() {
+  response=$(curl -s -X POST "$link/api/chat" -d @"$history_file" | jq --unbuffered -r '.message.content' | tr -d '\n' | sed 's/\\n/ /g')
+  echo -e "\nAssistant: $response"
+  if [[ "$choice2" == "1" ]]; then
+    edge-playback --text "$response" > /dev/null
+  fi
+  add_message_to_history "assistant" "$response | $NOW"
+}
+
+initialize_history
+
+while true; do
+
+  if [[ "$choice" == "2" ]]; then
+    mpv start-talking.wav &
+    sox -d speech.wav silence 1 0.1 1% 1 2.0 1% 
+    pipx run vosk --model voskmodels/* --input speech.wav --output transcription.txt
+    rm speech.wav
+    user_input=$(cat transcription.txt)
+  elif [[ "$choice" == "1" ]]; then
+    echo -n "You: "
+    read user_input
+  fi
+
+  if [[ "$user_input" == "goodbye" ]]; then
+    add_message_to_history "user" "$user_input"
+    chat_with_ollama
+    echo "Exiting chat."
+    break
+    exit
+  fi
+
+  if [[ "$user_input" == "forget every single thing" ]]; then
+    clear
+    echo '{"model": "'"$model"'", "messages": []}' > "$history_file"
+
+  elif [[ "$user_input" =~ ^model:[[:space:]]*(.*)$ ]]; then
+    new_model="${BASH_REMATCH[1]}"
+    update_model_in_history "$new_model"
+  
+  else
+    add_message_to_history "user" "$user_input"
+    chat_with_ollama
+  fi
+  
+done
