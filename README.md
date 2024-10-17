@@ -1,2 +1,19 @@
 # ollama-stt
-you can talk with your ollama ai
+
+
+Install ollama-chat with:
+```
+bash install.sh
+```
+
+To talk with your AI type:
+```bash
+ollama-chat
+```
+
+You can show your AI a picture with saying:
+```bash
+look
+```
+
+and if you want to use your voice download a vosk model and put it in the voskmodels folder for this site: https://alphacephei.com/vosk/models
