@@ -1,5 +1,5 @@
 #!/bin/bash
-
+continue=0
 banner () {
 echo " ▒█████   ██▓     ██▓    ▄▄▄       ███▄ ▄███▓ ▄▄▄      "
 echo "▒██▒  ██▒▓██▒    ▓██▒   ▒████▄    ▓██▒▀█▀ ██▒▒████▄    "
@@ -12,30 +12,71 @@ echo "░ ░ ░ ▒    ░ ░     ░ ░    ░   ▒ 
 echo "    ░ ░      ░  ░    ░  ░     ░  ░       ░         ░  ░"
 echo "                                                       "
 }
+
 clear 
 banner
-#pacman -S python-pipx sox jq --noconfirm
+# install jq python-pipx python zenity mpv
 #pipx install vosk edge-tts
-
 export PATH="$PATH:$HOME/.local/bin"
 link="http://localhost:11434"
-history_file="conversation_history.json"
-model="llama3.1"
-NOW=`date '+%F_%H:%M:%S'`
-
-ollama list | grep Error
+folder=${HOME}/.ollama-chat/
+history_file="${folder}chat-history.json"
+model="llava-llama3"
 
 echo "1. typing to respond"
 echo "2. speaking to respond (BETA)"
 read -r -p "Option: " choice
+
+if [[ "$choice" == "1" ]]; then
+  continue=1
+elif [[ "$choice" == "2" ]]; then
+  continue=1
+fi 
+
+if [[ "$continue" == "0" ]]; then
+  echo "didn't make a choice exiting..."
+  exit
+elif [[ "$continue" == "1" ]]; then
+  continue=0
+fi
+
 clear
 banner
 
 echo "1. Let your ai talk with voice"
 echo "2. Let your ai talk with text"
 read -r -p "Option: " choice2
+
+if [[ "$choice2" == "1" ]]; then
+  continue=1
+elif [[ "$choice2" == "2" ]]; then
+  continue=1
+fi 
+
+if [[ "$continue" == "0" ]]; then
+  echo "didn't make a choice exiting..."
+  exit
+elif [[ "$continue" == "1" ]]; then
+  continue=0
+fi
+
 clear
 banner
+
+user_prompt () {
+  if [[ "$choice" == "2" ]]; then
+    mpv ${folder}start-talking.wav &
+    sox -d ${folder}speech.wav silence 1 0.1 1% 1 2.0 1%
+    mpv ${folder}stop-talking.wav &
+    pipx run vosk --model ${folder}voskmodels/* --input ${folder}speech.wav --output ${folder}transcription.txt
+    cat ${folder}transcription.txt
+    rm ${folder}speech.wav
+    user_input=$(cat ${folder}transcription.txt)
+  elif [[ "$choice" == "1" ]]; then
+    echo -n "You: "
+    read user_input
+  fi
+}
 
 initialize_history() {
   if [[ ! -f "$history_file" ]]; then
@@ -60,46 +101,63 @@ add_message_to_history() {
     "$history_file" > tmp.json && mv tmp.json "$history_file"
 }
 
-chat_with_ollama() {
+chat_with_image() {
+  file=$(zenity --file-selection --title="Select a picture" --file-filter="Image files (jpg, png, gif) | *.jpg *.png *.gif")
+  image=$(cat $file | base64)
+  echo "image uploaded"
+  user_prompt
+  jq --arg role "user" --arg content "$user_input" --arg image "$image" \
+      '.messages += [{"role": $role, "prompt": $content, "images": [$image]}]' \
+      "$history_file" > tmp.json && mv tmp.json "$history_file"
   response=$(curl -s -X POST "$link/api/chat" -d @"$history_file" | jq --unbuffered -r '.message.content' | tr -d '\n' | sed 's/\\n/ /g')
   echo -e "\nAssistant: $response"
   if [[ "$choice2" == "1" ]]; then
     edge-playback --text "$response" > /dev/null
   fi
-  add_message_to_history "assistant" "$response | $NOW"
+  add_message_to_history "assistant" "$response"
+}
+
+chat_with_ollama() {
+  response=$(curl -s -X POST "$link/api/chat" -d @"$history_file" | jq --unbuffered -r '.message.content' | tr -d '\n' | sed 's/\\n/ /g')
+  echo -e "\nAssistant: $response"
+  if [[ "$choice2" == "1" ]]; then
+    if [[ "$choice" == "2" ]]; then
+      edge-playback --text "$response" > /dev/null
+    elif [[ "$choice" == "1" ]]; then
+      edge-playback --text "$response" > /dev/null &
+    fi
+  fi
+  add_message_to_history "assistant" "$response"
 }
 
 initialize_history
 
 while true; do
 
-  if [[ "$choice" == "2" ]]; then
-    mpv start-talking.wav &
-    sox -d speech.wav silence 1 0.1 1% 1 2.0 1% 
-    pipx run vosk --model voskmodels/* --input speech.wav --output transcription.txt
-    rm speech.wav
-    user_input=$(cat transcription.txt)
-  elif [[ "$choice" == "1" ]]; then
-    echo -n "You: "
-    read user_input
-  fi
+  user_prompt
 
   if [[ "$user_input" == "goodbye" ]]; then
+    user_input="i got to go goodbye"
     add_message_to_history "user" "$user_input"
     chat_with_ollama
     echo "Exiting chat."
     break
     exit
-  fi
-
-  if [[ "$user_input" == "forget every single thing" ]]; then
+  elif [[ "$user_input" == "forget every single thing" ]]; then
     clear
+    banner
     echo '{"model": "'"$model"'", "messages": []}' > "$history_file"
 
   elif [[ "$user_input" =~ ^model:[[:space:]]*(.*)$ ]]; then
     new_model="${BASH_REMATCH[1]}"
     update_model_in_history "$new_model"
-  
+
+  elif [[ "$user_input" == "look" ]]; then
+    echo "Processing image..."
+    chat_with_image
+  elif [[ "$user_input" == "luke" ]]; then
+    echo "Processing image..."
+    chat_with_image
   else
     add_message_to_history "user" "$user_input"
     chat_with_ollama
