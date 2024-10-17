@@ -134,7 +134,7 @@ while true; do
   user_prompt
 
   if [[ "$user_input" == "goodbye" ]]; then
-    user_input="i got to go goodbye"
+    user_input="i got to go i see you next time goodbye"
     add_message_to_history "user" "$user_input"
     chat_with_ollama
     echo "Exiting chat."
