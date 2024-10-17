@@ -16,4 +16,4 @@ You can show your AI a picture with saying:
 look
 ```
 
-and if you want to use your voice download a vosk model and put it in the voskmodels folder for this site: https://alphacephei.com/vosk/models
+and if you want to use your voice download a vosk model and put it in the voskmodels folder in $HOME/.ollama-chat/voskmodels from this site: https://alphacephei.com/vosk/models
