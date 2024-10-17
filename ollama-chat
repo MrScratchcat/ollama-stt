@@ -111,12 +111,7 @@ chat_with_image() {
   jq --arg role "user" --arg content "$user_input" --arg image "$image" \
       '.messages += [{"role": $role, "prompt": $content, "images": [$image]}]' \
       "$history_file" > tmp.json && mv tmp.json "$history_file"
-  response=$(curl -s -X POST "$link/api/chat" -d @"$history_file" | jq --unbuffered -r '.message.content' | tr -d '\n' | sed 's/\\n/ /g')
-  echo -e "\nAssistant: $response"
-  if [[ "$choice2" == "1" ]]; then
-    edge-playback --text "$response" > /dev/null
-  fi
-  add_message_to_history "assistant" "$response"
+  chat_with_ollama
 }
 
 chat_with_ollama() {
