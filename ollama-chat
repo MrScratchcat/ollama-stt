@@ -22,7 +22,9 @@ link="http://localhost:11434"
 folder=${HOME}/.ollama-chat/
 history_file="${folder}chat-history.json"
 model="llava-llama3"
-
+curl -s $link/api/pull -d '{
+  "name": "'"$model"'"
+}' | grep /dev/null
 echo "1. typing to respond"
 echo "2. speaking to respond (BETA)"
 read -r -p "Option: " choice
@@ -141,7 +143,6 @@ while true; do
     add_message_to_history "user" "$user_input"
     chat_with_ollama
     echo "Exiting chat."
-    break
     exit
   elif [[ "$user_input" == "forget every single thing" ]]; then
     clear
