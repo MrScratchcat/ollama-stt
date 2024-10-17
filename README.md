@@ -3,7 +3,7 @@
 
 Install ollama-chat with:
 ```
-bash install.sh
+git clone https://github.com/MrScratchcat/ollama-stt && cd ollama-stt && bash install.sh 
 ```
 
 To talk with your AI type:
