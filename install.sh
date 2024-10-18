@@ -1,5 +1,5 @@
 #!/bin/bash
-
+continue=0
 echo "1. run ollama locally"
 echo "2. run from server"
 read -r -p "Option: " choice
@@ -17,20 +17,20 @@ elif [[ "$continue" == "1" ]]; then
   continue=0
 fi
 
-install_ollama() {
-    if [[ "$choice" == "1" ]]; then
-        curl -fsSL https://ollama.com/install.sh | sh
-    elif [[ "$choice" == "2" ]]; then
-        echo "edit the link in ollama-chat and save changes"
-        read -p "If you have changed the file then press enter to continue"
-    fi 
-}
-install_ollama
+if [[ "$choice" == "1" ]]; then
+    curl -fsSL https://ollama.com/install.sh | sh
+elif [[ "$choice" == "2" ]]; then
+    echo "edit the link in ollama-chat and save changes"
+    read -p "If you have changed the file then press enter to continue"
+fi 
 
-mkdir ${HOME}/.ollama-chat
-mkdir ${HOME}/.ollama-chat/voskmodels
+# Check if the folder exists
+if [ ! -d "${HOME}/.ollama-chat" ]; then
+    mkdir ${HOME}/.ollama-chat
+    mkdir ${HOME}/.ollama-chat/voskmodels
+fi
+
 cp *.wav ${HOME}/.ollama-chat
-cp -r voskmodels ${HOME}/.ollama-chat
 sudo cp ollama-chat /bin
 sudo chmod +x /bin/ollama-chat
 
@@ -62,21 +62,22 @@ detect_distro() {
     fi
 }
 detect_distro
+echo "installing software..."
 if [ "$DISTRO" == debian-based ]; then
-    sudo apt update 
-    sudo apt install python3 python3-pipx jq python-pipx python zenity mpv sox curl -y 
+    sudo apt update  > /dev/null
+    sudo apt install python3 python3-pipx jq python-pipx python zenity mpv sox curl -y > /dev/null
     pipx install vosk edge-tts > /dev/null
 elif [ "$DISTRO" == fedora ]; then
-    sudo dnf update -y 
-    sudo dnf install python3 python3-pipx jq python-pipx python zenity mpv sox curl -y 
+    sudo dnf update -y  > /dev/null
+    sudo dnf install python3 python3-pipx jq python-pipx python zenity mpv sox curl -y  > /dev/null
     pipx install vosk edge-tts > /dev/null
 elif [ "$DISTRO" == arch ]; then
-    sudo pacman -Syyu --noconfirm
-    sudo pacman -S python python-pipx jq python-pipx python zenity mpv sox curl --noconfirm
+    sudo pacman -Syyu --noconfirm  > /dev/null
+    sudo pacman -S python python-pipx jq python-pipx python zenity mpv sox curl --noconfirm > /dev/null
     pipx install vosk edge-tts > /dev/null
 elif [ "$DISTRO" == opensuse ]; then
     sudo zypper update
-    sudo zypper install python python-pipxjq python-pipx python zenity mpv sox curl -y
+    sudo zypper install python python-pipxjq python-pipx python zenity mpv sox curl -y > /dev/null
     pipx install vosk edge-tts > /dev/null
 fi
 echo "now type: ollama-chat"
