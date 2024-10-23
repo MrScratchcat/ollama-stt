@@ -48,7 +48,7 @@ detect_distro() {
             "opensuse-tumbleweed"|"opensuse-leap")
                 DISTRO="opensuse"
                 ;;
-            "manjaro"|"arch"|"archlinux")
+            "manjaro"|"arch"|"archlinux"|"endeavouros")
                 DISTRO="arch"
                 ;;
             *)
