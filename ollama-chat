@@ -20,29 +20,7 @@ export PATH="$PATH:$HOME/.local/bin"
 link="http://localhost:11434"
 folder=${HOME}/.ollama-chat/
 history_file="${folder}chat-history.json"
-aimodel="llava-llama3"
-
-if curl -s $link/api/tags | grep -q "llucy:latest"; then
-    echo "Model llucy is installed." > /dev/null
-else
-    echo "llucy is not installed installing..."
-    sleep 1
-    echo "this can take a while grab a coffie in the meanwhile."
-    curl -s $link/api/pull -d '{
-        "name": "'"$aimodel"'"
-    }' | grep /dev/null
-
-    curl -s $link/api/create -d '{
-        "name": "llucy",
-        "modelfile": "FROM '$aimodel'\nSYSTEM you are an ai named llucy and to look at an picture/image you can say 'look' and no URL or filepath needed and then you will see the picture/image"
-    }' | grep -o success
-    echo "AI installed!"
-    sleep 1
-fi
-model="llucy"
-clear
-banner
-
+model="llava:13b"
 echo "1. typing to respond"
 echo "2. speaking to respond (BETA)"
 read -r -p "Option: " choice
@@ -82,24 +60,6 @@ fi
 
 clear
 banner
-
-update_model() {
-  echo "Assistant: updating now..."
-  sleep 1
-  echo "Assistant: this can take a while grab a coffie in the meanwhile."
-  curl -s $link/api/pull -d '{
-      "name": "'"$aimodel"'"
-  }' | grep /dev/null
-  curl -s $link/api/create -d '{
-      "name": "llucy",
-      "modelfile": "FROM "'$aimodel'"\nSYSTEM you are an ai named llucy and to look at an picture/image you can say 'look' and no URL or filepath needed and then you will see the picture/image"
-  }' | grep /dev/null
-    curl -s -X DELETE $link/api/delete -d '{
-    "name": "'"$aimodel"'"
-  }'| grep /dev/null
-  echo "updated!"
-  sleep 1
-}
 
 user_prompt () {
   if [[ "$choice" == "2" ]]; then
