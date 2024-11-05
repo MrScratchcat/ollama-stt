@@ -20,7 +20,7 @@ export PATH="$PATH:$HOME/.local/bin"
 link="http://localhost:11434"
 folder=${HOME}/.ollama-chat/
 history_file="${folder}chat-history.json"
-model="llava:13b"
+model="llava"
 echo "1. typing to respond"
 echo "2. speaking to respond (BETA)"
 read -r -p "Option: " choice
