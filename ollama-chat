@@ -2,16 +2,16 @@
 continue=0
 
 banner () {
-echo " ▒█████   ██▓     ██▓    ▄▄▄       ███▄ ▄███▓ ▄▄▄      "
-echo "▒██▒  ██▒▓██▒    ▓██▒   ▒████▄    ▓██▒▀█▀ ██▒▒████▄    "
-echo "▒██░  ██▒▒██░    ▒██░   ▒██  ▀█▄  ▓██    ▓██░▒██  ▀█▄  "
-echo "▒██   ██░▒██░    ▒██░   ░██▄▄▄▄██ ▒██    ▒██ ░██▄▄▄▄██ "
-echo "░ ████▓▒░░██████▒░██████▒▓█   ▓██▒▒██▒   ░██▒ ▓█   ▓██▒"
-echo "░ ▒░▒░▒░ ░ ▒░▓  ░░ ▒░▓  ░▒▒   ▓▒█░░ ▒░   ░  ░ ▒▒   ▓▒█░"
-echo "  ░ ▒ ▒░ ░ ░ ▒  ░░ ░ ▒  ░ ▒   ▒▒ ░░  ░      ░  ▒   ▒▒ ░"
-echo "░ ░ ░ ▒    ░ ░     ░ ░    ░   ▒   ░      ░     ░   ▒   "
-echo "    ░ ░      ░  ░    ░  ░     ░  ░       ░         ░  ░"
-echo "                                                       "
+echo " ▒█████   ██▓     ██▓    ▄▄▄       ███▄ ▄███▓ ▄▄▄      "
+echo "▒██▒  ██▒▓██▒    ▓██▒   ▒████▄    ▓██▒▀█▀ ██▒▒████▄    "
+echo "▒██░  ██▒▒██░    ▒██░   ▒██  ▀█▄  ▓██    ▓██░▒██  ▀█▄  "
+echo "▒██   ██░▒██░    ▒██░   ░██▄▄▄▄██ ▒██    ▒██ ░██▄▄▄▄██ "
+echo "░ ████▓▒░░██████▒░██████▒▓█   ▓██▒▒██▒   ░██▒ ▓█   ▓██▒"
+echo "░ ▒░▒░▒░ ░ ▒░▓  ░░ ▒░▓  ░▒▒   ▓▒█░░ ▒░   ░  ░ ▒▒   ▓▒█░"
+echo "  ░ ▒ ▒░ ░ ░ ▒  ░░ ░ ▒  ░ ▒   ▒▒ ░░  ░      ░  ▒   ▒▒ ░"
+echo "░ ░ ░ ▒    ░ ░     ░ ░    ░   ▒   ░      ░     ░   ▒   "
+echo "    ░ ░      ░  ░    ░  ░     ░  ░       ░         ░  ░"
+echo "                                                       "
 }
 
 clear 
@@ -95,9 +95,10 @@ add_message_to_history() {
   local role="$1"
   local content="$2"
   jq --arg role "$role" --arg content "$content" \
-    '.messages += [{"role": $role, "content": $content}]' \
+    '.messages += [{"role": $role, "content": $content, "stream": false}]' \
     "$history_file" > tmp.json && mv tmp.json "$history_file"
 }
+
 
 chat_with_image() {
   file=$(zenity --file-selection --title="Select a picture" --file-filter="Image files (jpg, png, gif) | *.jpg *.png *.gif")
