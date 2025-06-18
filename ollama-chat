@@ -20,42 +20,71 @@ export PATH="$PATH:$HOME/.local/bin"
 link="http://localhost:11434"
 folder=${HOME}/.ollama-chat/
 history_file="${folder}chat-history.json"
-model="llava"
-echo "1. typing to respond"
-echo "2. speaking to respond (BETA)"
-read -r -p "Option: " choice
 
-if [[ "$choice" == "1" ]]; then
-  continue=1
-elif [[ "$choice" == "2" ]]; then
-  continue=1
-fi 
+# Create folder if it doesn't exist
+mkdir -p "$folder"
 
-if [[ "$continue" == "0" ]]; then
-  echo "didn't make a choice exiting..."
+# Fetch available models and let user select
+get_available_models() {
+  models_response=$(curl -s "$link/api/tags" 2>/dev/null)
+  if [[ $? -ne 0 ]] || [[ -z "$models_response" ]]; then
+    zenity --error --text="Cannot connect to Ollama server at $link\nPlease make sure Ollama is running."
+    exit 1
+  fi
+  
+  # Extract model names and format for zenity
+  models=$(echo "$models_response" | jq -r '.models[].name' 2>/dev/null)
+  if [[ -z "$models" ]]; then
+    zenity --error --text="No models found on Ollama server.\nPlease install at least one model first."
+    exit 1
+  fi
+  
+  # Create zenity list format
+  model_list=""
+  while IFS= read -r model_name; do
+    if [[ -n "$model_name" ]]; then
+      model_list="$model_list $model_name $model_name"
+    fi
+  done <<< "$models"
+  
+  # Show model selection dialog
+  selected_model=$(zenity --list --title="Select AI Model" --text="Choose an AI model to chat with:" \
+    --column="Model" --column="Name" \
+    $model_list \
+    --height=400 --width=500)
+  
+  if [[ -z "$selected_model" ]]; then
+    zenity --info --text="No model selected, exiting..."
+    exit
+  fi
+  
+  model="$selected_model"
+  zenity --info --text="Selected model: $model"
+}
+
+# Get available models and let user select
+get_available_models
+
+choice=$(zenity --list --title="Input Method" --text="How would you like to respond?" \
+  --column="Option" --column="Description" \
+  "1" "Typing to respond" \
+  "2" "Speaking to respond (BETA)" \
+  --height=200 --width=400)
+
+if [[ -z "$choice" ]]; then
+  zenity --info --text="No choice made, exiting..."
   exit
-elif [[ "$continue" == "1" ]]; then
-  continue=0
 fi
 
-clear
-banner
+choice2=$(zenity --list --title="AI Voice Output" --text="How should the AI respond?" \
+  --column="Option" --column="Description" \
+  "1" "Let your AI talk with voice" \
+  "2" "Let your AI talk with text only" \
+  --height=200 --width=400)
 
-echo "1. Let your ai talk with voice"
-echo "2. Let your ai talk with text"
-read -r -p "Option: " choice2
-
-if [[ "$choice2" == "1" ]]; then
-  continue=1
-elif [[ "$choice2" == "2" ]]; then
-  continue=1
-fi 
-
-if [[ "$continue" == "0" ]]; then
-  echo "didn't make a choice exiting..."
+if [[ -z "$choice2" ]]; then
+  zenity --info --text="No choice made, exiting..."
   exit
-elif [[ "$continue" == "1" ]]; then
-  continue=0
 fi
 
 clear
@@ -63,16 +92,18 @@ banner
 
 user_prompt () {
   if [[ "$choice" == "2" ]]; then
+    zenity --info --text="Click OK and start speaking when you hear the tone..."
     mpv ${folder}start-talking.wav &
     sox -d ${folder}speech.wav silence 1 0.1 1% 1 2.0 1%
     mpv ${folder}stop-talking.wav &
     pipx run vosk --model ${folder}voskmodels/* --input ${folder}speech.wav --output ${folder}transcription.txt
-    cat ${folder}transcription.txt
-    rm ${folder}speech.wav
     user_input=$(cat ${folder}transcription.txt)
+    rm ${folder}speech.wav
   elif [[ "$choice" == "1" ]]; then
-    echo -n "You: "
-    read user_input
+    user_input=$(zenity --entry --title="Chat Input" --text="Enter your message:" --width=500)
+    if [[ -z "$user_input" ]]; then
+      user_input="exit"
+    fi
   fi
 }
 
@@ -86,9 +117,18 @@ initialize_history() {
 
 update_model_in_history() {
   local new_model="$1"
-  model="$new_model"
-  jq --arg model "$new_model" '.model = $model' "$history_file" > tmp.json && mv tmp.json "$history_file"
-  echo "Model updated to: $new_model"
+  
+  # Verify the new model exists
+  models_response=$(curl -s "$link/api/tags" 2>/dev/null)
+  available_models=$(echo "$models_response" | jq -r '.models[].name' 2>/dev/null)
+  
+  if echo "$available_models" | grep -q "^$new_model$"; then
+    model="$new_model"
+    jq --arg model "$new_model" '.model = $model' "$history_file" > tmp.json && mv tmp.json "$history_file"
+    zenity --info --text="Model updated to: $new_model"
+  else
+    zenity --error --text="Model '$new_model' not found on server.\nAvailable models:\n$available_models"
+  fi
 }
 
 add_message_to_history() {
@@ -102,9 +142,16 @@ add_message_to_history() {
 
 chat_with_image() {
   file=$(zenity --file-selection --title="Select a picture" --file-filter="Image files (jpg, png, gif) | *.jpg *.png *.gif")
+  if [[ -z "$file" ]]; then
+    zenity --error --text="No image selected"
+    return
+  fi
   image=$(cat $file | base64)
-  echo "image uploaded"
+  zenity --info --text="Image uploaded successfully"
   user_prompt
+  if [[ "$user_input" == "exit" ]]; then
+    return
+  fi
   jq --arg role "user" --arg content "$user_input" --arg image "$image" \
       '.messages += [{"role": $role, "prompt": $content, "images": [$image]}]' \
       "$history_file" > tmp.json && mv tmp.json "$history_file"
@@ -112,8 +159,58 @@ chat_with_image() {
 }
 
 chat_with_ollama() {
-  response=$(curl -s -X POST "$link/api/chat" -d @"$history_file" | jq --unbuffered -r '.message.content' | tr -d '\n' | sed 's/\\n/ /g')
-  echo -e "\nAssistant: $response"
+  # Show progress dialog
+  (
+    echo "10" ; echo "# Sending request to AI..."
+    sleep 1
+    echo "50" ; echo "# Processing response..."
+    sleep 1
+    echo "90" ; echo "# Finalizing..."
+    sleep 1
+    echo "100" ; echo "# Complete"
+  ) | zenity --progress --title="AI Processing" --text="Communicating with AI..." --percentage=0 --auto-close
+
+  # Handle both regular and thinking models
+  full_response=$(curl -s -X POST "$link/api/chat" -d @"$history_file")
+  
+  # Try to extract reasoning (for thinking models)
+  reasoning=$(echo "$full_response" | jq -r '.message.reasoning // empty' 2>/dev/null)
+  
+  # Extract main content and handle thinking tags
+  raw_response=$(echo "$full_response" | jq -r '.message.content // .message' 2>/dev/null)
+  
+  # Check if response contains <think> tags
+  if [[ "$raw_response" =~ \<think\>(.*)\</think\>(.*) ]]; then
+    thinking_content="${BASH_REMATCH[1]}"
+    response="${BASH_REMATCH[2]}"
+    
+    # Clean up the response but preserve spacing, handle newlines and unicode
+    response=$(echo "$response" | sed 's/^[[:space:]]*//' | tr '\n' ' ' | sed 's/\\n/ /g' | sed 's/\\u[0-9a-fA-F]\{4\}//g' | sed 's/\\F0\\9F\\[0-9a-fA-F]\\[0-9a-fA-F]/😊/g')
+    
+    # Ask if user wants to see thinking process
+    if zenity --question --text="This model used reasoning. Would you like to see the thinking process?" 2>/dev/null; then
+      # Escape special characters for zenity
+      thinking_display=$(echo "$thinking_content" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' | tr '\n' ' ')
+      zenity --info --title="AI Thinking Process" --text="$thinking_display" --width=600 --height=400
+    fi
+  else
+    # Regular response or reasoning from API field - fix formatting
+    response=$(echo "$raw_response" | tr '\n' ' ' | sed 's/\\n/ /g' | sed 's/\\F0\\9F\\98\\8A/😊/g' | sed 's/\\u[0-9a-fA-F]\{4\}//g')
+    
+    if [[ -n "$reasoning" && "$reasoning" != "null" && "$reasoning" != "empty" ]]; then
+      if zenity --question --text="This is a thinking model. Would you like to see the reasoning process?" 2>/dev/null; then
+        reasoning_display=$(echo "$reasoning" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' | tr '\n' ' ')
+        zenity --info --title="AI Reasoning" --text="$reasoning_display" --width=600 --height=400
+      fi
+    fi
+  fi
+  
+  # Clean up extra spaces and escape special characters for zenity display
+  response_display=$(echo "$response" | sed 's/  */ /g' | sed 's/^ *//' | sed 's/ *$//' | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+  
+  # Display the main response
+  zenity --info --title="AI Response" --text="Assistant: $response_display" --width=600 --height=300
+  
   if [[ "$choice2" == "1" ]]; then
     if [[ "$choice" == "2" ]]; then
       edge-playback --text "$response" > /dev/null
@@ -121,38 +218,35 @@ chat_with_ollama() {
       edge-playback --text "$response" > /dev/null &
     fi
   fi
+  
+  # Store the clean response without thinking tags
   add_message_to_history "assistant" "$response"
 }
 
 initialize_history
 
 while true; do
-
   user_prompt
 
-  if [[ "$user_input" == "goodbye" ]]; then
+  if [[ "$user_input" == "exit" ]]; then
+    break
+  elif [[ "$user_input" == "goodbye" ]]; then
     user_input="i got to go i see you next time goodbye"
     add_message_to_history "user" "$user_input"
     chat_with_ollama
-    echo "Exiting chat."
+    zenity --info --text="Goodbye! Chat session ended."
     exit
   elif [[ "$user_input" == "forget every single thing" ]]; then
-    clear
-    banner
     echo '{"model": "'"$model"'", "messages": []}' > "$history_file"
-
+    zenity --info --text="Chat history cleared!"
   elif [[ "$user_input" =~ ^model:[[:space:]]*(.*)$ ]]; then
     new_model="${BASH_REMATCH[1]}"
     update_model_in_history "$new_model"
-
-  elif [[ "$user_input" == "look" ]]; then
-    echo "Processing image..."
-    chat_with_image
-  elif [[ "$user_input" == "luke" ]]; then
-    echo "Processing image..."
+    zenity --info --text="Model updated to: $new_model"
+  elif [[ "$user_input" == "look" || "$user_input" == "luke" ]]; then
     chat_with_image
   elif [[ "$user_input" == "update" ]]; then
-    update_model
+    zenity --info --text="Update functionality not implemented yet"
   else
     add_message_to_history "user" "$user_input"
     chat_with_ollama
